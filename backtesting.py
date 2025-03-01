@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import MetaTrader5 as mt5  # For historical data fetching
 import pytz
 from matplotlib.dates import DateFormatter
+import os
 
 class EMA_Crossover_Backtest:
     def __init__(self, symbol="XAUUSD", timeframe=mt5.TIMEFRAME_M5, ema_fast=80, ema_slow=280, 
@@ -38,10 +39,24 @@ class EMA_Crossover_Backtest:
     
     def connect_to_mt5(self):
         """Connect to MetaTrader 5 to fetch historical data"""
-        if not mt5.initialize():
+
+        # VERY IMPORTANT:  Replace with YOUR ACTUAL PATH
+        mt5_path = r"C:\Program Files\MetaTrader 5\terminal64.exe"
+
+        print(f"Attempting to connect to MT5 at path: {mt5_path}")
+
+        if not os.path.exists(mt5_path):
+            print(f"ERROR: MT5 executable not found at: {mt5_path}")
+            print("       Please check the path and update mt5_path.")
+            return False
+
+        if not mt5.initialize(path=mt5_path, timeout=3000, login=5034026957, password="*0NzOcSs", server="MetaQuotes-Demo"): # Increased to 30s
             print(f"initialize() failed, error code = {mt5.last_error()}")
+            print("       Check MT5 is running, automated trading is enabled,")
+            print("       and DLL imports are allowed in MT5 settings.")
             return False
             
+        # ... (rest of your connect_to_mt5 method remains the same) ...
         # Check if the symbol exists
         symbol_info = mt5.symbol_info(self.symbol)
         if symbol_info is None:
@@ -56,7 +71,6 @@ class EMA_Crossover_Backtest:
                 print(f"symbol_select({self.symbol}) failed, error code = {mt5.last_error()}")
                 mt5.shutdown()
                 return False
-                
         print(f"Connected to MetaTrader 5, using symbol {self.symbol}")
         self.mt5_connected = True
         return True
@@ -74,6 +88,8 @@ class EMA_Crossover_Backtest:
         end_date_utc = timezone.localize(self.end_date)
         
         # Fetch historical bars
+        print(f"Attempting to fetch data for symbol: {self.symbol}, timeframe: {self.timeframe}")
+        print(f"Date range: {start_date_utc} to {end_date_utc}")
         bars = mt5.copy_rates_range(self.symbol, self.timeframe, start_date_utc, end_date_utc)
         if bars is None or len(bars) == 0:
             print(f"Failed to fetch historical data: {mt5.last_error()}")
@@ -149,7 +165,7 @@ class EMA_Crossover_Backtest:
         data = self.fetch_historical_data()
         if data is None:
             print("No data available for backtesting")
-            return None
+            return None, None  # Return a tuple with None values instead of just None
             
         # Calculate signals
         data = self.calculate_signals(data)
@@ -483,35 +499,50 @@ class EMA_Crossover_Backtest:
         
     def run(self):
         """Run the complete backtest process"""
-        # Fetch data, run backtest, calculate performance and plot results
-        trades_df, price_data = self.backtest()
-        
-        if trades_df is not None and len(trades_df) > 0:
-            self.plot_results(price_data, trades_df)
-            self.save_results(trades_df)
-        
-        # Clean up
-        if self.mt5_connected:
-            mt5.shutdown()
-            print("MetaTrader 5 connection closed")
+        try:
+            # Fetch data, run backtest, calculate performance and plot results
+            trades_df, price_data = self.backtest()
+            
+            if trades_df is not None and price_data is not None and len(trades_df) > 0:
+                self.plot_results(price_data, trades_df)
+                self.save_results(trades_df)
+            else:
+                print("No trades or price data available for analysis")
+        except Exception as e:
+            print(f"Error in run method: {e}")
+        finally:
+            # Clean up
+            if self.mt5_connected:
+                mt5.shutdown()
+                print("MetaTrader 5 connection closed")
         
         return self.performance_metrics if hasattr(self, 'performance_metrics') else None
 
 if __name__ == "__main__":
     # Create and run the backtest
-    # Note: Adjust date range as needed
-    start_date = datetime(2024, 1, 1)
-    end_date = datetime(2024, 2, 29)
+    # Use a more recent timeframe - last 30 days
+    start_date = datetime.now() - timedelta(days=60)
+    end_date = datetime.now() - timedelta(days=1)  # Yesterday
     
+    print(f"Testing date range: {start_date} to {end_date}")
+    
+    # Try a different timeframe - hourly might be more reliable than 5 min
     backtest = EMA_Crossover_Backtest(
         symbol="XAUUSD",
-        timeframe=mt5.TIMEFRAME_M5,
-        ema_fast=80,
-        ema_slow=280,
+        timeframe=mt5.TIMEFRAME_M5,  # Changed to hourly timeframe
+        ema_fast=80,                 # Adjusted for hourly
+        ema_slow=280,                 # Adjusted for hourly
         risk_percent=1.0,
         initial_capital=10000,
         start_date=start_date,
         end_date=end_date
     )
     
-    results = backtest.run()
+    try:
+        results = backtest.run()
+        if results:
+            print("Backtest completed successfully with results")
+        else:
+            print("Backtest completed but no results were generated")
+    except Exception as e:
+        print(f"Error running backtest: {e}")

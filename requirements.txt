@@ -1,5 +1,5 @@
-numpy==1.24.3
-pandas==2.0.3
-# MetaTrader5 package is primarily for Windows
-# For macOS, you'll need to use a Windows virtual machine or Wine
-# See README.md for more details 
+pandas
+numpy==1.21.6
+matplotlib
+MetaTrader5
+pytz

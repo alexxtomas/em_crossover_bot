@@ -1,4 +1,5 @@
 # EMA Crossover Trading Bot
+source venv/Scripts/activate
 
 This is an automated trading bot that uses Exponential Moving Average (EMA) crossovers to generate trading signals for the XAUUSD (Gold) market using MetaTrader 5.
 
