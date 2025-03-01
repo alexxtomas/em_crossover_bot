@@ -424,7 +424,7 @@ class EMA_Crossover_Backtest:
         return self.performance_metrics if hasattr(self, 'performance_metrics') else None
 
 if __name__ == "__main__":
-    start_date = datetime.now() - timedelta(days=365)
+    start_date = datetime.now() - timedelta(days=730)
     end_date = datetime.now() - timedelta(days=1)  # Yesterday
     print(f"Testing date range: {start_date} to {end_date}")
     backtest = EMA_Crossover_Backtest(
@@ -433,7 +433,7 @@ if __name__ == "__main__":
         ema_fast=80,
         ema_slow=200,
         risk_percent=1.0,
-        initial_capital=10000,
+        initial_capital=100000,
         start_date=start_date,
         end_date=end_date
     )
