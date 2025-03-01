@@ -8,7 +8,7 @@ from matplotlib.dates import DateFormatter
 import os
 
 class EMA_Crossover_Backtest:
-    def __init__(self, symbol="XAUUSD", timeframe=mt5.TIMEFRAME_M5, ema_fast=80, ema_slow=280, 
+    def __init__(self, symbol="XAUUSD", timeframe=mt5.TIMEFRAME_M5, ema_fast=80, ema_slow=200, 
                  risk_percent=1.0, initial_capital=10000, start_date=None, end_date=None):
         """Initialize the EMA Crossover Backtester"""
         self.symbol = symbol
@@ -76,25 +76,53 @@ class EMA_Crossover_Backtest:
         return True
         
     def fetch_historical_data(self):
-        """Fetch historical price data from MT5"""
+        """Fetch historical price data from MT5 in smaller chunks"""
         if not self.mt5_connected:
             if not self.connect_to_mt5():
                 print("Failed to connect to MT5. Unable to fetch historical data.")
                 return None
-                
+            
         # Convert datetime to UTC for MT5
         timezone = pytz.timezone("Etc/UTC")
-        start_date_utc = timezone.localize(self.start_date)
         end_date_utc = timezone.localize(self.end_date)
+        start_date_utc = timezone.localize(self.start_date)
         
-        # Fetch historical bars
-        print(f"Attempting to fetch data for symbol: {self.symbol}, timeframe: {self.timeframe}")
-        print(f"Date range: {start_date_utc} to {end_date_utc}")
-        bars = mt5.copy_rates_range(self.symbol, self.timeframe, start_date_utc, end_date_utc)
+        # For M5 timeframe, fetch data in 14-day chunks to avoid request size limits
+        if self.timeframe == mt5.TIMEFRAME_M5:
+            print(f"Fetching M5 data in chunks for symbol: {self.symbol}")
+            
+            all_bars = []
+            current_start = start_date_utc
+            chunk_size = timedelta(days=14)
+            
+            while current_start < end_date_utc:
+                current_end = min(current_start + chunk_size, end_date_utc)
+                print(f"Fetching chunk: {current_start} to {current_end}")
+                
+                chunk_bars = mt5.copy_rates_range(self.symbol, self.timeframe, current_start, current_end)
+                if chunk_bars is not None and len(chunk_bars) > 0:
+                    all_bars.extend(chunk_bars)
+                    print(f"Fetched {len(chunk_bars)} bars for this chunk")
+                else:
+                    print(f"Failed to fetch data for chunk: {mt5.last_error()}")
+                
+                current_start = current_end
+            
+            if not all_bars:
+                print("No data was fetched in any chunk")
+                return None
+            
+            bars = np.array(all_bars)
+        else:
+            # For other timeframes, fetch normally
+            print(f"Attempting to fetch data for symbol: {self.symbol}, timeframe: {self.timeframe}")
+            print(f"Date range: {start_date_utc} to {end_date_utc}")
+            bars = mt5.copy_rates_range(self.symbol, self.timeframe, start_date_utc, end_date_utc)
+        
         if bars is None or len(bars) == 0:
             print(f"Failed to fetch historical data: {mt5.last_error()}")
             return None
-            
+        
         # Convert to DataFrame
         df = pd.DataFrame(bars)
         df['time'] = pd.to_datetime(df['time'], unit='s')
@@ -521,7 +549,7 @@ class EMA_Crossover_Backtest:
 if __name__ == "__main__":
     # Create and run the backtest
     # Use a more recent timeframe - last 30 days
-    start_date = datetime.now() - timedelta(days=60)
+    start_date = datetime.now() - timedelta(days=365)
     end_date = datetime.now() - timedelta(days=1)  # Yesterday
     
     print(f"Testing date range: {start_date} to {end_date}")
@@ -531,7 +559,7 @@ if __name__ == "__main__":
         symbol="XAUUSD",
         timeframe=mt5.TIMEFRAME_M5,  # Changed to hourly timeframe
         ema_fast=80,                 # Adjusted for hourly
-        ema_slow=280,                 # Adjusted for hourly
+        ema_slow=200,                 # Adjusted for hourly
         risk_percent=1.0,
         initial_capital=10000,
         start_date=start_date,
